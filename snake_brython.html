@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Snake (Brython)</title>
+  <style>
+    :root{--bg:#0f1724;--panel:#0b1220;--accent:#16a34a;--muted:#94a3b8}
+    body{background:linear-gradient(180deg,var(--bg),#071028);font-family:Inter,system-ui,Arial;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#e6eef8}
+    .wrap{display:grid;grid-template-columns:360px 1fr;gap:20px;padding:28px}
+    .card{background:rgba(255,255,255,0.03);padding:16px;border-radius:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6)}
+    canvas{background:#071331;border-radius:8px;display:block}
+    h1{margin:0 0 8px;font-size:20px}
+    p{margin:6px 0 0;color:var(--muted);font-size:13px}
+    .info{display:flex;flex-direction:column;gap:10px}
+    .row{display:flex;gap:8px;align-items:center}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:inherit;cursor:pointer}
+    .small{font-size:13px;color:var(--muted)}
+    .score{font-weight:700;color:var(--accent);font-size:18px}
+    footer{grid-column:1/-1;margin-top:6px;color:var(--muted);font-size:12px;text-align:center}
+    @media (max-width:800px){.wrap{grid-template-columns:1fr;}}
+  </style>
+  <!-- Brython CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/brython@3.11.1/brython.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/brython@3.11.1/brython_stdlib.js"></script>
+</head>
+<body onload="brython()">
+  <div class="wrap">
+    <div class="card" style="width:360px">
+      <h1>Snake — HTML + CSS + Python (Brython)</h1>
+      <p class="small">Controls: arrow keys / WASD. Press Space to pause / resume. Click New Game to restart.</p>
+
+      <div class="info" style="margin-top:12px">
+        <div class="row"><div>Score:</div><div class="score" id="score">0</div></div>
+        <div class="row"><button id="new" class="btn">New Game</button><button id="pause" class="btn">Pause</button></div>
+        <div class="small">Grid size: 20 × 20  —  Cell size: 18px</div>
+        <div class="small">Built with Brython: Python runs directly in the browser.</div>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex;align-items:center;justify-content:center">
+      <canvas id="game" width="360" height="360"></canvas>
+    </div>
+
+    <footer class="small">Open this file on a local server (e.g. <code>python -m http.server</code>) and navigate to it.</footer>
+  </div>
+
+  <script type="text/python">
+from browser import document, timer, html, window
+from random import randint
+
+CANVAS = document['game']
+ctx = CANVAS.getContext('2d')
+SCORE_EL = document['score']
+NEW_BTN = document['new']
+PAUSE_BTN = document['pause']
+
+# Configuration
+CELL = 18
+COLS = CANVAS.width // CELL
+ROWS = CANVAS.height // CELL
+TICK_MS = 90
+
+# Game state
+snake = []
+dir_x = 1
+dir_y = 0
+food = (0,0)
+score = 0
+running = False
+_loop = None
+
+
+def reset_game(e=None):
+    global snake, dir_x, dir_y, food, score, running, _loop
+    snake = [(COLS//2 - i, ROWS//2) for i in range(3)]
+    dir_x, dir_y = 1, 0
+    place_food()
+    score = 0
+    SCORE_EL.text = str(score)
+    running = True
+    PAUSE_BTN.text = 'Pause'
+    if _loop:
+        timer.clear_interval(_loop)
+    _loop = timer.set_interval(tick, TICK_MS)
+
+
+def place_food():
+    global food
+    while True:
+        f = (randint(0, COLS-1), randint(0, ROWS-1))
+        if f not in snake:
+            food = f
+            break
+
+
+def draw_cell(x, y, fill=True, color=None):
+    if not color:
+        color = '#16a34a' if fill else '#0b1220'
+    ctx.fillStyle = color
+    ctx.fillRect(x*CELL, y*CELL, CELL-1, CELL-1)
+
+
+def draw():
+    # background
+    ctx.clearRect(0,0,CANVAS.width,CANVAS.height)
+    ctx.fillStyle = '#071331'
+    ctx.fillRect(0,0,CANVAS.width,CANVAS.height)
+
+    # food
+    draw_cell(food[0], food[1], color='#ef4444')
+
+    # snake
+    head = True
+    for x,y in snake:
+        if head:
+            draw_cell(x,y,color='#60a5fa')
+            head = False
+        else:
+            draw_cell(x,y,color='#10b981')
+
+
+def game_over():
+    global running
+    running = False
+    if _loop:
+        timer.clear_interval(_loop)
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'
+    ctx.fillRect(0, CANVAS.height//2 - 30, CANVAS.width, 60)
+    ctx.fillStyle = '#fff'
+    ctx.font = '20px Arial'
+    ctx.textAlign = 'center'
+    ctx.fillText('Game Over — press New Game', CANVAS.width/2, CANVAS.height/2 + 6)
+
+
+def tick():
+    global snake, score, running
+    if not running:
+        return
+    head_x, head_y = snake[0]
+    nx = (head_x + dir_x) % COLS
+    ny = (head_y + dir_y) % ROWS
+
+    # collision with self
+    if (nx, ny) in snake:
+        game_over()
+        return
+
+    snake.insert(0, (nx, ny))
+
+    if (nx, ny) == food:
+        score += 1
+        SCORE_EL.text = str(score)
+        place_food()
+    else:
+        snake.pop()
+
+    draw()
+
+
+def on_key(ev):
+    global dir_x, dir_y, running
+    code = ev.code
+    # arrow keys and WASD
+    mapping = {
+        'ArrowUp': (0, -1), 'KeyW': (0, -1),
+        'ArrowDown': (0, 1), 'KeyS': (0, 1),
+        'ArrowLeft': (-1, 0), 'KeyA': (-1, 0),
+        'ArrowRight': (1, 0), 'KeyD': (1, 0)
+    }
+    if code == 'Space':
+        running = not running
+        if running:
+            PAUSE_BTN.text = 'Pause'
+        else:
+            PAUSE_BTN.text = 'Resume'
+        return
+
+    if code in mapping:
+        nx, ny = mapping[code]
+        # prevent reversing
+        if (nx, ny) != (-dir_x, -dir_y):
+            dir_x, dir_y = nx, ny
+
+
+# Buttons
+NEW_BTN.bind('click', reset_game)
+PAUSE_BTN.bind('click', lambda e: on_key(window.event or window.event))
+
+# Keyboard
+window.bind('keydown', on_key)
+
+# Start
+reset_game()
+  </script>
+</body>
+</html>
